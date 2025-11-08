@@ -3,7 +3,7 @@ import torch.utils
 import torch.utils.data
 import time
 import numpy as np
-from elements.model_wrappers import UNet, DynamicCNN1D, DynamicCNN3D
+from elements.model_wrappers import UNet, DynamicCNN1D, DynamicCNN3D, HITFusionNet
 
 # configure logging
 from elements.utils import LoggerSingleton
@@ -31,7 +31,7 @@ def process_model_output(model, inputs, tile_height=100, inference_mode='patched
     """
     torch.cuda.empty_cache()
 
-    if isinstance(model, (DynamicCNN3D, UNet)):
+    if isinstance(model, (DynamicCNN3D, UNet, HITFusionNet)):
         height = inputs.size(2)
         outputs_list = []
         for start in range(0, height, tile_height):

@@ -283,12 +283,13 @@ def run_pipeline(config):
 # cnn1d      → PATCHES       → .npz   (1D spectra)
 # cnn3d      → TILES         → .npz   (3D cubes)
 # unet       → TILES         → .pt    (full image + coordinates)
+# hitfusion  → TILES         → .npz   (fusion-ready cubes)
 # -------------------------------------------------
 
 if __name__ == '__main__':
     class ParameterConfig:
         def __init__(self):
-            self.model_type = 'cnn1d'                           # cnn1d or cnn3d or unet
+            self.model_type = 'cnn1d'                           # cnn1d or cnn3d or unet or hitfusion
 
             # specific parameters of cnn1d
             if self.model_type == 'cnn1d':
@@ -345,6 +346,23 @@ if __name__ == '__main__':
                 self.cnn_fc_layers = None                       # cnn number of fc layers is set to None using the unet model
                 self.cnn_dropout_rate = None                    # cnn dropout rate is set to None using the unet model
                 self.cnn_final_activation = 'none'              # cnn final activation layer is set to 'none' using the unet model
+
+            if self.model_type == 'hitfusion':
+                self.train_dataset_name = 'train_tiled.npz'
+                self.test_dataset_name = 'test_tiled.npz'
+                self.in_channel = 224
+                self.start_filters = 32
+                self.cnn_conv_block_type = None
+                self.cnn_input_length = None
+                self.cnn_conv_layers = 3                        # reuse as number of context layers
+                self.cnn_fc_layers = None
+                self.cnn_dropout_rate = 0.3
+                self.unet_depth = None
+                self.batch_size = 128
+                self.num_workers = 4
+                self.patience = 7
+                self.factor = 0.7
+                self.learning_rate = 0.0007
 
             # choose general parameters
             self.ignore_indices = [0]                           # choose indices to be ignored by the model 0 for void

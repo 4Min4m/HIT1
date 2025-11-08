@@ -149,7 +149,7 @@ The usage section is divided into several pipelines, each responsible for a spec
 
 **Class ParameterConfig Attributes:**
 
-- model_type (str): Determines which type of model is initialized. Valid choices are `'cnn1d'`, `'cnn3d'`, or `'unet'`. Based on this choice, relevant parameters are automatically configured in the constructor.
+- model_type (str): Determines which type of model is initialized. Valid choices are `'cnn1d'`, `'cnn3d'`, `'unet'`, or `'hitfusion'`. Based on this choice, relevant parameters are automatically configured in the constructor.
 
 - train_dataset_name (str): The filename (relative to the dataset directory) used for loading the training dataset. This is set to different .npz files based on the chosen `model_type`.
 
@@ -231,6 +231,10 @@ The usage section is divided into several pipelines, each responsible for a spec
 4. Validating and saving the best-performing model snapshots based on the lowest validation loss.
 5. Testing models with loaded datasets to evaluate performance and generate predictions.
 6. Visualizing output mappings from the testing phase and saving results.
+
+### HIT-Fusion Model (Intermediate Spectral-Spatial Fusion)
+
+The `hitfusion` model type adds an intermediate-fusion classifier tailored for hyperspectral textile analysis. A spectral branch condenses the 224-band signature of each tile into a compact descriptor, while a spatial branch preserves neighbourhood context with dilated convolutions. Their features are concatenated before the final classifier, allowing the network to reason about what a pixel is (spectral cues) and where it occurs (spatial cues). Configure it by setting `model_type = 'hitfusion'` in `ParameterConfig`; the default settings expect tiled `.npz` datasets (`train_tiled.npz` for training and `test.npz` for inference) with the same preprocessing used for CNN3D/UNet models.
 
 ---
 

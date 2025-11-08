@@ -422,3 +422,84 @@ class DynamicCNN3D(nn.Module):
 
         x = self.fc_layers(x)
         return self.final_activation(x)
+
+
+class HITFusionNet(nn.Module):
+    """Intermediate-fusion network that combines spectral and spatial encoders."""
+
+    def __init__(
+        self,
+        in_channels: int,
+        num_classes: int,
+        start_filters: int = 32,
+        context_layers: int = 2,
+        dropout: float = 0.3,
+    ):
+        super().__init__()
+        self.in_channels = in_channels
+        self.num_classes = num_classes
+        self.start_filters = start_filters
+
+        spectral_hidden = max(start_filters * 2, start_filters)
+        self.spectral_branch = nn.Sequential(
+            nn.Linear(in_channels, spectral_hidden),
+            nn.ReLU(inplace=True),
+            nn.Dropout(dropout),
+            nn.Linear(spectral_hidden, start_filters),
+            nn.ReLU(inplace=True),
+        )
+
+        self.spatial_stem = nn.Sequential(
+            nn.Conv2d(in_channels, start_filters, kernel_size=3, padding=1),
+            nn.BatchNorm2d(start_filters),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(start_filters, start_filters, kernel_size=3, padding=1),
+            nn.BatchNorm2d(start_filters),
+            nn.ReLU(inplace=True),
+        )
+
+        self.context_layers = nn.ModuleList()
+        for i in range(max(1, context_layers)):
+            dilation = 2 ** i
+            self.context_layers.append(
+                nn.Sequential(
+                    nn.Conv2d(
+                        start_filters,
+                        start_filters,
+                        kernel_size=3,
+                        padding=dilation,
+                        dilation=dilation,
+                    ),
+                    nn.BatchNorm2d(start_filters),
+                    nn.ReLU(inplace=True),
+                )
+            )
+
+        self.spatial_dropout = nn.Dropout2d(dropout)
+
+        fusion_channels = start_filters * 2
+        self.fusion_head = nn.Sequential(
+            nn.Conv2d(fusion_channels, start_filters, kernel_size=1),
+            nn.BatchNorm2d(start_filters),
+            nn.ReLU(inplace=True),
+            nn.Dropout2d(dropout),
+            nn.Conv2d(start_filters, num_classes, kernel_size=1),
+        )
+
+        self.final_activation = nn.LogSoftmax(dim=1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        spectral_vector = x.mean(dim=[2, 3])
+        spectral_features = self.spectral_branch(spectral_vector)
+
+        spatial_features = self.spatial_stem(x)
+        for layer in self.context_layers:
+            spatial_features = spatial_features + layer(spatial_features)
+        spatial_features = self.spatial_dropout(spatial_features)
+
+        batch_size, _, height, width = spatial_features.shape
+        spectral_map = spectral_features.view(batch_size, -1, 1, 1).expand(-1, -1, height, width)
+
+        fused = torch.cat([spatial_features, spectral_map], dim=1)
+        logits = self.fusion_head(fused)
+        return self.final_activation(logits)
