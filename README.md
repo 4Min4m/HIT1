@@ -262,9 +262,4 @@ The usage section is divided into several pipelines, each responsible for a spec
 ## Acknowledgments
 
 -   We would like to express gratitude to our partner organizations for their valuable support and contributions to this research. We thank Sympany, CuRe Circular Textile B.V., Arapaha, House of Design, Batenburg Beenen, de Tijdelijke Expert, Havep, Modint, and NRK for providing essential resources, and industry insights that significantly enhanced the relevance and impact of this work.
----
-## Author
-
-**Milad Isakhani Zakaria**  
-_Supervisors:_ **Ben Wolf**, **Klaas Dijkstra**
 
