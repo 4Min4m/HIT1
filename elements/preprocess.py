@@ -7,8 +7,13 @@ import torch.utils.data
 import numexpr as ne
 from elements.visualize import visualize_image_and_mask
 
+# working dir
+def _get_working_dir():
+    return  '/home/student/myprojects/HIT1/'
+
 # configure logging
 from elements.utils import LoggerSingleton
+LoggerSingleton.setup_logger(_get_working_dir())
 logger = LoggerSingleton.get_logger()
 
 def compute_ffc_statistics(ffc_data):

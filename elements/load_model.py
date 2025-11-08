@@ -2,7 +2,7 @@ import torch
 import torch.utils
 import torch.utils.data
 NoneType = type(None)
-from elements.model_wrappers import UNet, DynamicCNN1D, DynamicCNN3D
+from elements.model_wrappers import UNet, DynamicCNN1D, DynamicCNN3D, HITFusionNet
 
 # configure logging
 from elements.utils import LoggerSingleton
@@ -78,7 +78,14 @@ def initialize_model(model_type, in_channels, out_classes,start_filters, cnn_inp
         model = UNet(in_channels=in_channels, num_classes=out_classes, depth=unet_depth, start_filters=start_filters)
         if best_state_path is not None:
             model.load_state_dict(torch.load(best_state_path))
+
+    #update by me
+    elif model_type == 'hitfusion':
+        model = HITFusionNet(in_channels=in_channels,num_classes=out_classes,start_filters=start_filters,context_layers=cnn_conv_layers if cnn_conv_layers is not None else 2,
+        dropout=cnn_dropout)
+        if best_state_path is not None:
+            model.load_state_dict(torch.load(best_state_path))
     else:
-        raise ValueError("Invalid model type. Choose 'cnn1d' or 'unet' or 'cnn3d'.")
+         raise ValueError("Invalid model type. Choose 'cnn1d', 'unet', 'cnn3d', or 'hitfusion'.")
 
     return model

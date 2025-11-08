@@ -276,19 +276,21 @@ def run_pipeline(config):
         logger.info(f"Results successfully saved to {results_dir}")
 
 # execute
-# CORRECT DATASET NAMES FOR EACH MODEL TYPE
-# -------------------------------------------------
-# MODEL      → USES          → CORRECT FILE EXTENSION
 # -------------------------------------------------
 # cnn1d      → PATCHES       → .npz   (1D spectra)
+# cnn1d      → PATCHES       → .npz   (1D spectra)
+# cnn3d      → TILES         → .npz   (3D cubes)
 # cnn3d      → TILES         → .npz   (3D cubes)
 # unet       → TILES         → .pt    (full image + coordinates)
+# unet       → TILES         → .pt    (full image + coordinates)
 # -------------------------------------------------
+# hitfusion  → TILES         → .npz   (fusion-ready cubes)
+#
 
 if __name__ == '__main__':
     class ParameterConfig:
         def __init__(self):
-            self.model_type = 'cnn1d'                           # cnn1d or cnn3d or unet
+            self.model_type = 'hitfusion'                          # cnn1d or cnn3d or unet or hitfusion
 
             # specific parameters of cnn1d
             if self.model_type == 'cnn1d':
@@ -346,12 +348,30 @@ if __name__ == '__main__':
                 self.cnn_dropout_rate = None                    # cnn dropout rate is set to None using the unet model
                 self.cnn_final_activation = 'none'              # cnn final activation layer is set to 'none' using the unet model
 
+            if self.model_type == 'hitfusion':
+                self.ignore_indices = [0]  # choose indices to be ignored by the model 0 for void
+                self.train_dataset_name = 'train_tiled_new.npz'
+                self.test_dataset_name = 'test_tiled.npz'
+                self.in_channel = 224
+                self.start_filters = 32
+                self.cnn_conv_block_type = None
+                self.cnn_input_length = None
+                self.cnn_conv_layers = 3  # reuse as number of context layers
+                self.cnn_fc_layers = None
+                self.cnn_dropout_rate = 0.3
+                self.unet_depth = None
+                self.batch_size = 128
+                self.num_workers = 4
+                self.patience = 7
+                self.factor = 0.7
+                self.learning_rate = 0.0007
+
             # choose general parameters
             self.ignore_indices = [0]                           # choose indices to be ignored by the model 0 for void
             self.train_ratio = 0.7                              # set train-validation ratio
             self.check_stratification = False                   # check tiles or patches stratification
             self.pin_memory = True                              # dataloader pin memory
-            self.num_epochs = 40                               # number of epochs
+            self.num_epochs = 400                               # number of epochs
             self.val_frequency = 1                              # set validation frequency
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
             self.writer = create_tb(os.path.join(_get_working_dir(),'log','experiment'))
@@ -367,10 +387,9 @@ if __name__ == '__main__':
             self.inference_stride = 5                           # used during inference_mode = 'patched'
             self.pixel_batch_size = 80000                       # used during inference_mode = 'pixel-wise'
 
-            self.do_train = False                              # True to run training pipeline
-            self.do_test = True                              # True to run test pipeline
-            self.display_mapping = True                         # True to display output mapping
-            # self.experiment = 'cnn1d_best'                      # default value should be set to 'experiment'
+            self.do_train = True                              # True to run training pipeline
+            self.do_test = False                             # True to run test pipeline
+            self.display_mapping = False                      # True to display output mapping
             self.experiment = 'experiment'                      # my update
 
 

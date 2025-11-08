@@ -119,7 +119,34 @@ def stratified_split_by_composition(dataset, train_ratio, model_type,check_strat
     file_name_tensor = torch.tensor(file_name_hashes).view(-1, 1).float()
 
     # process labels based on the model structure
-    if model_type == 'unet' or model_type == 'cnn3d':
+    #old method
+    # if model_type == 'unet' or model_type == 'cnn3d':
+
+        # process labels based on the model structure
+        # -------------------------------------------------------------------------
+        # ## FIX ##
+        # Added 'hit_fusion' to this check. Your 'hit_fusion' model uses
+        # 4D segmentation masks as labels, just like 'unet'. This logic
+        # correctly reduces the 4D mask [N, C, H, W] to a 2D composition
+        # vector [N, C] for stratification.
+        #
+        # This prevents the 'else' block from running, which was trying to
+        # concatenate a 2D tensor with your 4D label tensor, causing the crash.
+        # -------------------------------------------------------------------------
+    #update by me
+    if model_type == 'unet' or model_type == 'cnn3d' or model_type == 'hit_fusion':
+        # for unet/hit_fusion dataset, reshape labels to (samples, composition, pixels) and find the mode composition
+
+        # Ensure labels are 4D [N, C, H, W]
+        if dataset.labels.dim() == 3:
+            # This might be [N, H, W] sparse labels, needs one-hot
+            # Assuming labels are [N, C, H, W] as per create_hsi_dataset_from_csv
+            logger.warning("Label dimension is 3, stratification logic might be incorrect.")
+            # If sparse [N, H, W], it should be [N, 1, H, W]
+            labels_4d = dataset.labels.unsqueeze(1)
+        else:
+            labels_4d = dataset.labels
+
         # for unet dataset, reshape labels to (samples, composition, pixels) and find the mode composition
         num_samples, num_classes, width, height = dataset.labels.shape
         labels_reshaped = dataset.labels.view(num_samples, num_classes, -1)
@@ -420,6 +447,91 @@ def load_hsi_dataset(dataset_path):
     logger.info(f"HSITileDataset loaded from {dataset_path} with {len(dataset)} samples.")
     return dataset
 
+
+    #update by me
+    # logger.info(f"Loading dataset from {dataset_path}")
+    #
+    # if not os.path.exists(dataset_path):
+    #     raise FileNotFoundError(f"Dataset not found: {dataset_path}")
+    #
+    # # Determine file type by extension
+    # ext = os.path.splitext(dataset_path)[1].lower()
+    #
+    # if ext == '.pt':
+    #     # PyTorch dataset (used by UNet with coordinates)
+    #     return torch.load(dataset_path, weights_only=False)
+    #
+    # elif ext == '.npz':
+    #     # NumPy archive (used by cnn1d, cnn3d, hitfusion)
+    #     data = np.load(dataset_path, allow_pickle=True)
+    #     # Standard keys expected: 'data', 'labels', optionally 'coords', 'names'
+    #     return data
+    #
+    # else:
+    #     raise ValueError(f"Unsupported dataset format: {ext}. Use .pt or .npz")
+    # return dataset
+
+# def load_hsi_dataset(dataset_path):
+#     """
+#     Load an HSI dataset by intelligently routing to the correct
+#     loader (PyTorch's load or NumPy's load) based on file extension.
+#
+#     :param dataset_path: Path to the saved dataset (.pt or .npz file)
+#     :return: An instance of HSITileDataset
+#     """
+#     logger.info(f"Attempting to load dataset from: {dataset_path}")
+#     file_extension = os.path.splitext(dataset_path)[1]
+#
+#     if file_extension == '.pt':
+#         # This is for datasets saved by create_hsi_dataset_from_csv (e.g., 'raw' mode)
+#         # These files contain the entire, pre-built HSITileDataset object.
+#         dataset = torch.load(dataset_path, weights_only=False)
+#         if not isinstance(dataset, HSITileDataset):
+#             raise TypeError(f"Loaded .pt file is not 'HSITileDataset', but {type(dataset)}")
+#         logger.info(f"HSITileDataset loaded from .pt file with {len(dataset)} samples.")
+#
+#     elif file_extension == '.npz':
+#         # This is for standard training .npz archives.
+#         # We must manually load the arrays and construct the HSITileDataset object.
+#         logger.info(f"Loading HSI dataset from .npz file...")
+#         try:
+#             # data is the NpzFile object
+#             data = np.load(dataset_path, allow_pickle=True)
+#         except Exception as e:
+#             logger.error(f"Failed to load .npz file {dataset_path}: {e}")
+#             raise
+#
+#         # Extract arrays from the NpzFile object
+#         tiles = torch.tensor(data['tiles'])
+#         labels = torch.tensor(data['labels'])
+#         coords = torch.tensor(data['coords']) if 'coords' in data else torch.empty(0)
+#         file_names = data['file_names'] if 'file_names' in data else np.array([])
+#
+#         # Metadata is often not present or needed in the simple .npz training files
+#         rgb_images = data['rgb_images'].item() if 'rgb_images' in data else {}
+#         masks = data['masks'].item() if 'masks' in data else {}
+#         tiled_images = data['tiled_images'].item() if 'tiled_images' in data else {}
+#         class_names = data['class_names'].tolist() if 'class_names' in data else []
+#
+#         # CRITICAL STEP: Create the HSITileDataset object from the arrays
+#         dataset = HSITileDataset(
+#             tiles=tiles,
+#             labels=labels,
+#             coords=coords,
+#             file_names=file_names,
+#             rgb_images=rgb_images,
+#             masks=masks,
+#             tiled_images=tiled_images,
+#             class_names=class_names,
+#             training_mode=True  # Assume .npz files are for training
+#         )
+#         logger.info(f"HSITileDataset loaded from .npz file with {len(dataset)} samples.")
+#
+#     else:
+#         raise ValueError(f"Unknown dataset file extension: '{file_extension}' in {dataset_path}. Must be .pt or .npz")
+#
+#     # This now correctly returns an HSITileDataset object
+    return dataset
 
 def load_prediction_dict(path):
     """
