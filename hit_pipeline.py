@@ -78,6 +78,7 @@ from elements.calc_metrics import calculate_metrics
 from elements.visualize import create_tb, show_loss_tb, display_output_mapping, create_output_mapping
 from elements.save_model import save_model
 from elements.save_results import create_prediction_dict, create_results_dict, save_prediction_dict
+from elements.data_analysis import analyze_dataset_distribution, visualize_class_distribution, check_label_consistency
 
 # disable specific warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="torch.nn.functional")
@@ -232,32 +233,60 @@ def run_pipeline(config):
         logger.info("Starting training pipeline ...")
 
         dataset = load_hsi_dataset(dataset_path=os.path.join(_get_working_dir(), 'dataset', config.train_dataset_name))
+        # STEP 1: Analyze data distribution
+        logger.info("\n" + "=" * 80)
+        logger.info("DIAGNOSTIC: Analyzing Training Data Distribution")
+        logger.info("=" * 80)
+        check_label_consistency(dataset)
+        class_weights, class_counts = analyze_dataset_distribution(dataset, "Training Dataset")
+        visualize_class_distribution(
+            class_counts,
+            dataset.get_class_names(),
+            save_path= "log/experiment/class_distribution.png")
         #old method
         # train_dataset, val_dataset = stratified_split_by_composition(dataset=dataset,train_ratio=config.train_ratio,
         #     model_type=config.model_type,check_stratification=config.check_stratification)
-
         #update by me
         train_size = int(config.train_ratio * len(dataset))
         val_size = len(dataset) - train_size
+        # STEP 2: Use fixed stratified split
         train_dataset, val_dataset = random_split(
             dataset,
             [train_size, val_size],
             generator=torch.Generator().manual_seed(42)  # for reproducibility
         )
-
-
+        # Create data loaders
         train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True, num_workers=config.num_workers, pin_memory=config.pin_memory)
         val_loader = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False, num_workers=config.num_workers, pin_memory=config.pin_memory)
 
+        # STEP 3: Calculate class weights for balanced loss
+        from improved_training import calculate_class_weights
+        class_weights = calculate_class_weights(
+            train_dataset,
+            ignore_index=0,
+            device=config.device
+        )
+
+        # Initialize model
         model = initialize_model(model_type=config.model_type,in_channels=config.in_channel,out_classes=len(dataset.get_class_names()),
             cnn_conv_block_type=config.cnn_conv_block_type,start_filters=config.start_filters,cnn_input_length=config.cnn_input_length,
             cnn_conv_layers=config.cnn_conv_layers,cnn_fc_layers=config.cnn_fc_layers,
             cnn_dropout=config.cnn_dropout_rate,unet_depth=config.unet_depth).to(config.device)
-        loss_func = calc_divergence_loss(ignore_indices=config.ignore_indices)
+        #old method
+        # loss_func = calc_divergence_loss(ignore_indices=config.ignore_indices)
+        #update by me
+        #Use weighted CrossEntropyLoss instead of divergence loss
+        import torch.nn as nn
+        loss_func = nn.CrossEntropyLoss(
+            weight=class_weights,
+            ignore_index=0  # Ignore void class
+        )
+        # Initialize optimizer and scheduler
         optimizer = get_adam_optimizer_pt(model=model,learning_rate=config.learning_rate)
         scheduler = get_step_lr_pt(optimizer, mode='min', patience=config.patience, factor=config.factor)
-
-        run_training(train_loader=train_loader,val_loader=val_loader,model=model,optimizer=optimizer,loss_func=loss_func,scheduler=scheduler,config=config)
+        # STEP 5: Run improved training with detailed metrics
+        from improved_training import run_training_improved
+        run_training_improved(train_loader=train_loader,val_loader=val_loader,model=model,optimizer=optimizer,loss_func=loss_func,scheduler=scheduler,config=config,class_names=dataset.get_class_names())
 
     if config.do_test:
         logger.info("Starting inference pipeline ...")
@@ -363,7 +392,7 @@ if __name__ == '__main__':
 
             if self.model_type == 'hitfusion':
                 self.ignore_indices = [0]  # choose indices to be ignored by the model 0 for void
-                self.train_dataset_name = 'train_tiled_new.npz'
+                self.train_dataset_name = 'train_tiled.npz'
                 self.test_dataset_name = 'test_tiled.npz'
                 self.in_channel = 224
                 self.start_filters = 32
@@ -375,16 +404,19 @@ if __name__ == '__main__':
                 self.unet_depth = None
                 self.batch_size = 128
                 self.num_workers = 4
-                self.patience = 7
-                self.factor = 0.7
-                self.learning_rate = 0.0007
+                # Training hyperparameters
+                # self.patience = 7
+                #update
+                self.patience = 10
+                self.factor = 0.5
+                self.learning_rate = 0.001
 
             # choose general parameters
             self.ignore_indices = [0]                           # choose indices to be ignored by the model 0 for void
             self.train_ratio = 0.7                              # set train-validation ratio
             self.check_stratification = False                   # check tiles or patches stratification
             self.pin_memory = True                              # dataloader pin memory
-            self.num_epochs = 400                               # number of epochs
+            self.num_epochs = 300                               # number of epochs
             self.val_frequency = 1                              # set validation frequency
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
             self.writer = create_tb(os.path.join(_get_working_dir(),'log','experiment'))
@@ -400,9 +432,9 @@ if __name__ == '__main__':
             self.inference_stride = 5                           # used during inference_mode = 'patched'
             self.pixel_batch_size = 80000                       # used during inference_mode = 'pixel-wise'
 
-            self.do_train = True                              # True to run training pipeline
-            self.do_test = False                             # True to run test pipeline
-            self.display_mapping = False                      # True to display output mapping
+            self.do_train = False                            # True to run training pipeline
+            self.do_test = True                             # True to run test pipeline
+            self.display_mapping = True                      # True to display output mapping
             self.experiment = 'experiment'                      # my update
 
 
